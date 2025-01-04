@@ -27,7 +27,7 @@ Implementare su un solver il modello MILP CutQC.
 - **Shot-wise uniforme** (numero di shots/QPUs selezionate).
 
 - **Selezioniamo insieme QPUs**  
-  \(\rightarrow\) Minimizza \(\max (\text{tempo di coda} + \frac{\text{tempo di esecuzione}}{\#QPU}) + \text{tempo post-processing}\).
+  Minimizza max (tempo di coda + tempo di esecuzione\#QPU + tempo post-processing
 
 ---
 
@@ -36,7 +36,7 @@ Implementare su un solver il modello MILP CutQC.
   (ad esempio, ogni QPU ha associato un modello prezzo e/o una stima dell’affidabilità dei risultati).
 
 - **Selezioniamo insieme QPUs**  
-  \(\rightarrow\) Minimizza la combinazione lineare \(\bigl[\max (\text{tempo di coda} + \frac{\text{tempo di esecuzione}}{\#QPU}) + \text{tempo post-processing}\bigr]\) + gli altri requisiti.
+  Minimizza la combinazione lineare max (tempo di coda + tempo di esecuzione\#QPU + tempo post-processing) + gli altri requisiti.
 
 - **Vincoli di tipo predicato**  
   (esempio: GDPR che ci scarta macchine fuori dall’Europa).

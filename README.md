@@ -1,7 +1,3 @@
-# milp-cutqc-optimizer
-modello MILP per ottimizzare la selezione delle QPUs
-
-
 Step 0
     Implementare su un solver il modello MILP CutQC.
 

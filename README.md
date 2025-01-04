@@ -14,7 +14,7 @@ Implementare su un solver il modello MILP CutQC.
   - Tempo di coda.  
 
 - **Selezioniamo solo una**  
-  \(\rightarrow\) Minimizza \( \text{tempo di coda} + \text{tempo di esecuzione} + \text{tempo post-processing} \).
+  Minimizza (tempo di coda + tempo di esecuzione + tempo post-processing).
 
 ---
 

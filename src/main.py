@@ -1,7 +1,9 @@
 
 
 from final_model.model import ModelloCutAndShoot
-from circuit.graph_to_circuit import build_subcircuits
+from circuit.graph_to_circuit import costruisci_sottocircuiti
+from circuit.queue import CircuitQueue
+
 from qpu.qpu import QPU
 import pennylane as qml
 from pennylane import CircuitGraph
@@ -89,7 +91,7 @@ status, obj_value = modello.solve_model()
 # stampa risultati
 sottocircuiti = modello.stampa_e_restituisci_risultato()
 print("--------------------------------")
-circuit_queue = build_subcircuits(circuito.qtape, sottocircuiti, qpus)
+circuit_queue = CircuitQueue(circuito.qtape, sottocircuiti, qpus)
 circuit_queue.stampa_coda()
 print("--------------------------------")
 circuit_queue.esegui_sottocircuiti()

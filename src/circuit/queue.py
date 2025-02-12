@@ -2,15 +2,44 @@ import random
 import pennylane as qml
 
 class CircuitQueue:
-    def __init__(self, qpus):
-
+    def __init__(self, original_tape, sottocircuiti, qpus):
+        # inizializza la struttura 
+        # dizionario {qpu_index_0: [QuantumTape], qpu_index_1: [QuantumTape], ...}
         subcircuit_queue = {}
-
         for q in qpus:
             subcircuit_queue[q.index] = []
 
         self.subcircuit_queue = subcircuit_queue
         self.qpus = qpus
+
+        #costruisci i sottocircuiti
+        for sub_id, info in sottocircuiti.items():
+            vertices = info["vertices"]
+            shots_info = info["shots"]
+
+            # se non ci sono vertici considera vuoto
+            if not vertices or len(vertices) == 0:
+                continue
+        
+            # per ogni QPU, controlliamo se è previsto un numero di shot
+            for q in qpus:
+                if q.index not in shots_info:
+                    continue
+
+                num_shots = shots_info[q.index]
+
+                # dividi osservabili e operazioni
+                ops_idx = [v for v in vertices if v < len(original_tape.operations)]
+                obs_idx = [v - len(original_tape.operations) for v in vertices if v >= len(original_tape.operations)]
+                
+                sub_ops = [original_tape.operations[i] for i in ops_idx]
+                sub_obs = [original_tape.observables[i] for i in obs_idx]
+                
+                print(f"Aggiunta sottocircuito {sub_id} alla  {q.index}")
+                self.aggiungi_sottocircuito(q.index, sub_ops, sub_obs, num_shots)   
+
+
+
         
 
     def aggiungi_sottocircuito(self, qpu_index, ops, obs, n_shots):

@@ -332,7 +332,7 @@ class ModelloCutAndShoot:
         if solver is not None:
             self.problem.solve(solver)
         else:
-            self.problem.solve()
+            self.problem.solve( )
 
         return pulp.LpStatus[self.problem.status], pulp.value(self.problem.objective)
 

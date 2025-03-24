@@ -1,2 +1,8 @@
 pulp
 pennylane
+qiskit
+qiskit-aer
+matplotlib
+pylatexenc
+qiskit_ibm_runtime
+qiskit_ibm_provider

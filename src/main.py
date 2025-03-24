@@ -18,7 +18,6 @@ from pprint import pprint
 def create_qpus():
     """Creates a list of QPUs and optionally overrides their metrics."""
 
-    # QPU names to create
     qpu_types = [
         'aer_simulator',
         'aer_simulator_statevector',
@@ -27,7 +26,7 @@ def create_qpus():
         'ibm_oslo',
     ]
 
-    # Optional override: (qpu_type, execution_time, queue_time, capacity)
+    # optional override: (qpu_type, execution_time, queue_time, capacity)
     qpu_override_params = {
         'aer_simulator': (10, 1, 10),
         'aer_simulator_statevector': (12, 2, 8),

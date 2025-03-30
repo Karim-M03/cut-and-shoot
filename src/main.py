@@ -19,7 +19,6 @@ from pprint import pprint
 def create_qpus():
     """creates a list of QPUs and optionally overrides their metrics."""
 
-    # QPU names to create
     qpu_types = [
         'aer_simulator',
         'aer_simulator_statevector',

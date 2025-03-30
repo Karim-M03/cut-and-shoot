@@ -1,5 +1,4 @@
 pulp
-pennylane
 qiskit
 qiskit-aer
 matplotlib

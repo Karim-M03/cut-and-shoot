@@ -360,7 +360,7 @@ class CutAndShootModel:
         print(f"Objective value: {obj_value:.4f}\n")
 
         if status == "Infeasible":
-            return None
+            raise Exception("Status Infeasible")
 
         # result dictionary (only subcircuits with at least one vertex)
         subcircuits_data = {}
@@ -431,4 +431,4 @@ class CutAndShootModel:
         for c, data in subcircuits_data.items():
             print(f"Subcircuit {c} - In: {data['cuts']['in']}, Out: {data['cuts']['out']}")
 
-        return subcircuits_data
+        return subcircuits_data, pulp.value(self.K)

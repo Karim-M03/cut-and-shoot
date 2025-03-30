@@ -17,9 +17,9 @@ class QPU:
             self.backend_name = 'unknown'
 
     def _initialize_backend(self, qpu_type):
-        """Try to load either an AerSimulator or an IBM backend."""
+        """try to load either an AerSimulator or an IBM backend."""
         try:
-            # Check if it's a local simulator name (like "aer_simulator")
+            # check if it's a local simulator name (like "aer_simulator")
             if qpu_type in [b.name() for b in AerSimulator.backends()]:
                 return AerSimulator()
             
@@ -34,7 +34,7 @@ class QPU:
         return AerSimulator()
 
     def _set_backend_metrics(self):
-        """Set execution time, queue time, and capacity based on backend."""
+        """set execution time, queue time, and capacity based on backend."""
         config = self.backend.configuration()
 
         self.simulator = config.simulator

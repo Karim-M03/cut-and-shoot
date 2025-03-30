@@ -4,6 +4,7 @@ import examples.simple_circuit
 from runner import run_circuit_list
 from graph import get_dag_mapping, extract_graph_data
 from merge import merge_and_normalize_variant_counts
+from post_processing import fd_reconstruct_variant_dict, dd_reconstruct_variant_dict
 
 
 from model import CutAndShootModel
@@ -16,7 +17,7 @@ from pprint import pprint
 
 
 def create_qpus():
-    """Creates a list of QPUs and optionally overrides their metrics."""
+    """creates a list of QPUs and optionally overrides their metrics."""
 
     # QPU names to create
     qpu_types = [
@@ -27,7 +28,7 @@ def create_qpus():
         'ibm_oslo',
     ]
 
-    # Optional override: (qpu_type, execution_time, queue_time, capacity)
+    # optional override: (qpu_type, execution_time, queue_time, capacity)
     qpu_override_params = {
         'aer_simulator': (10, 1, 10),
         'aer_simulator_statevector': (12, 2, 8),
@@ -41,7 +42,7 @@ def create_qpus():
         qpu = QPU(qpu_type, i)
         if qpu_type in qpu_override_params:
             exec_time, queue_time, capacity = qpu_override_params[qpu_type]
-            qpu.update_metrics(exec_time, queue_time, capacity)
+            qpu.update_metrics(exec_time, queue_time, capacity) #comment this if you don t want to override the metrics
         qpus.append(qpu)
 
     return qpus
@@ -51,9 +52,9 @@ def create_qpus():
 
 def main():
     # choose a circuit example
-    # qc = examples.simple_circuit.simple_circuit()
-    # qc = examples.rca.ripple_carry_adder(2)
-    qc = examples.grover.grover_circuit(2)
+    qc = examples.simple_circuit.simple_circuit()
+    # qc = examples.rca.ripple_carry_adder(5)
+    # qc = examples.grover.grover_circuit(2)
     print(qc.draw())
 
     # convert to DAG and extract data
@@ -66,15 +67,6 @@ def main():
 
     # create QPUs and model
     qpus = create_qpus()
-    qpu_params = [
-        ('aer_simulator', 10, 1, 10),
-        ('aer_simulator_statevector', 12, 2, 8),
-        ('ibmq_qasm_simulator', 60, 3, 6),
-        ('ibm_nairobi', 300, 6, 2),
-        ('ibm_oslo', 280, 5, 3),
-    ]
-
-    pprint(qpus)
 
     # print local index and node information for each DAG operation node
     print("\nNode information (using local indexes):")
@@ -103,7 +95,7 @@ def main():
     )
 
     model.solve_model()
-    subcircuits = model.print_and_return_solution()
+    subcircuits, num_cuts = model.print_and_return_solution()
 
     # create all subcircuit variants
     quantum_subcircuits = create_quantum_subcircuits(subcircuits, qc, id_mapping=id_mapping)
@@ -136,7 +128,18 @@ def main():
         pprint(results)
         result_list.append(results)
 
-    pprint(merge_and_normalize_variant_counts(result_list))
+    # print(f"\n============================== Merged results ==============================\n")
+    variants_results = merge_and_normalize_variant_counts(result_list)
+    pprint(variants_results)
+
+    print("Num cuts: ", num_cuts)
+    coefficent = 1/pow(16, num_cuts) # 16 becuase we have 4 possible initial states and 4 possible measurement states
+    print("Coefficent: ", coefficent)
+
+    pprint(fd_reconstruct_variant_dict(variants_results, coefficent))
+    pprint(dd_reconstruct_variant_dict(variants_results, coefficent))
+
+
 
 
     

@@ -28,7 +28,7 @@ def calculate_required_qubits(
     :param vertices: set of vertex IDs belonging to the subcircuit
     :param dag_nodes: list of all DAGOpNodes from the full circuit
     :param id_mapping: mapping from original DAG node IDs to normalized node IDs
-    :return: (number of required qubits, mapping from global to local qubit index)
+    :return (number of required qubits, mapping from global to local qubit index)
     """
 
     # to avoid duplicates
@@ -82,15 +82,15 @@ def append_gates(
 ) -> None:
     """
     adds all relevant gates to the subcircuit and handles qubit initialization
-    at cut points.
+    at cut points
 
     :param sub_qc: the subcircuit being constructed
     :param dag_nodes: full list of DAGOpNodes
-    :param vertices: vertex IDs belonging to the current subcircuit
+    :param vertices: vertex ids belonging to the current subcircuit
     :param qreg: quantum register for the subcircuit
-    :param cuts_in: IDs of input-cut vertices
-    :param init_variants_queue: queue of initialization variants for cut-ins
-    :param id_mapping: mapping from original DAG node IDs to normalized node IDs
+    :param cuts_in: ids of input-cut vertices
+    :param init_variants_queue: queue of initialization variants for cut_ins
+    :param id_mapping: mapping from original dag node ids to local node ids
     :param qbit_mapping: mapping from global qubits to local indices
     """
     for node in dag_nodes:
@@ -108,12 +108,12 @@ def append_gates(
             variant = init_variants_queue[mapped_id_node].popleft()
             apply_initializations(sub_qc, qreg, local_indices, variant)
         else:
-            # sanity check: no duplicate qubits
+            # no duplicate qubits
             if len(set(local_indices)) < len(local_indices):
                 print('error: node has duplicate qubits:', node.op.name, node.qargs)
                 print('mapped_qubits =', local_indices)
 
-            # append the actual gate
+            # append the gate
             sub_qc.append(node.op, [qreg[idx] for idx in local_indices])
 
 
@@ -141,7 +141,7 @@ def append_measurements(
     cbit_index = 0
     measured_qubits = set()
 
-    # loop through each output node and apply the requested measurement
+    # loop through each output node and apply the measurement
     for out_node_id, measure_variant in zip(cuts_out, out_combo):
         out_dag_node = dag_nodes_dict.get(out_node_id)
         if not out_dag_node:
@@ -157,14 +157,16 @@ def append_measurements(
                 continue
 
             # apply the correct basis transformation if needed
-            if measure_variant == 'x':
-                sub_qc.h(qreg[local_qb_idx])
-            elif measure_variant == 'z':
-                sub_qc.sdg(qreg[local_qb_idx])
+            if measure_variant == 'id':
+                # no rotation
+                pass
+            elif measure_variant == 'x':
                 sub_qc.h(qreg[local_qb_idx])
             elif measure_variant == 'y':
                 sub_qc.sdg(qreg[local_qb_idx])
                 sub_qc.h(qreg[local_qb_idx])
+            elif measure_variant == 'z':
+                pass
 
             # perform the measurement
             sub_qc.measure(qreg[local_qb_idx], creg[cbit_index])
@@ -182,7 +184,7 @@ def create_quantum_subcircuits(
     generates all variants of the quantum subcircuits defined in subcircuits,
     accounting for all combinations of input initializations and output measurements
 
-    :param subcircuits: dictionary mapping subcircuit ID to subgraph structure:
+    :param subcircuits: dictionary mapping subcircuit id to subgraph structure:
                           {
                             id: {
                               "vertices": [...],
@@ -192,14 +194,14 @@ def create_quantum_subcircuits(
                               }
                             }
                           }
-    :param qc: the original  quantum circuit
-    :param id_mapping: mapping from original DAG node IDs to local node IDs
+    :param qc: the original  quantum circuit needed to know which node do waht
+    :param id_mapping: mapping from original dag node ids to local node ids
     :param max_workers: max number of threads
-    :return: dictionary {sub_id: {variant_name: QuantumCircuit, ...}, ...}
+    :return dictionary {sub_id: {variant_name: QuantumCircuit, ...}, ...}
     """
     result: Dict[int, Dict[str, QuantumCircuit]] = defaultdict(dict)
 
-    # convert full circuit to DAG for node access
+    # convert full circuit to dag for node access
     dag = circuit_to_dag(qc)
     dag_nodes = list(dag.topological_op_nodes())
 
@@ -225,7 +227,7 @@ def create_quantum_subcircuits(
             qreg = QuantumRegister(num_qubits, f"q{sub_id}")
             base_sub_qc = QuantumCircuit(qreg)
 
-            # initialize cut-in states
+            # initialize cut_in states
             init_variants_queue = {
                 node_id: deque([variant])
                 for node_id, variant in zip(cuts_in, in_combo)

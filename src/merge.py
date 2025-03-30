@@ -6,14 +6,14 @@ def merge_and_normalize_variant_counts(
 ) -> Dict[str, Dict[str, Any]]:
     """
     merges results of subcircuit variants run across multiple QPUs
-    each variant is merged by adding raw counts and normalized based on total shots.
+    each variant is merged by adding raw counts and normalized based on total shots
 
     :param qpu_results_list: List of QPU results.
         Each QPU result is a dict: {variant_name: {
-            'counts': {bitstring: raw count},
+            'counts': {bitstring: count},
             'active_qubits': [...]
         }}
-    :return: Dict of {variant_name: {
+    :return Dict of {variant_name: {
         'probabilities': {bitstring: prob},
         'active_qubits': [...]
     }}

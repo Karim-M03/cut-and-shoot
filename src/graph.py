@@ -6,7 +6,7 @@ def get_dag_mapping(dag: DAGCircuit) -> Dict[int, int]:
     """
     remap DAG node IDs to local indices starting from 0
     """
-    return {node._node_id: new_id for new_id, node in enumerate(dag.topological_op_nodes())}
+    return {node._node_id: new_id for new_id, node in enumerate(dag.op_nodes())}
 
 
 def extract_graph_data(
@@ -25,7 +25,7 @@ def extract_graph_data(
     """
     vertex_weights: Dict[int, int] = {
         id_mapping[node._node_id]: len(node.qargs)
-        for node in dag.topological_op_nodes()
+        for node in dag.op_nodes()
     }
 
     edges: Set[Tuple[int, int]] = {

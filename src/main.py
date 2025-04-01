@@ -1,24 +1,18 @@
-import examples.grover
-import examples.rca
-import examples.simple_circuit
+from matplotlib import pyplot as plt
+from pprint import pprint
+
+from qiskit import QuantumCircuit
+
 from runner import run_circuit_list
 from graph import get_dag_mapping, extract_graph_data
 from merge import merge_and_normalize_variant_counts
-from post_processing import fd_reconstruct_variant_dict, dd_reconstruct_variant_dict
-
-
 from model import CutAndShootModel
 from qiskit.converters import circuit_to_dag
-from qiskit.dagcircuit import DAGOpNode
-from constructor import create_quantum_subcircuits
+from constructor import create_quantum_subcircuits, build_subcircuit_map
 from qpu import QPU
-from pprint import pprint
-
-
 
 def create_qpus():
-    """creates a list of QPUs and optionally overrides their metrics."""
-
+    """Creates a list of QPUs and optionally overrides their metrics."""
     qpu_types = [
         'aer_simulator',
         'aer_simulator_statevector',
@@ -27,13 +21,12 @@ def create_qpus():
         'ibm_oslo',
     ]
 
-    # optional override: (qpu_type, execution_time, queue_time, capacity)
     qpu_override_params = {
-        'aer_simulator': (10, 1, 10),
-        'aer_simulator_statevector': (12, 2, 8),
-        'ibmq_qasm_simulator': (60, 3, 6),
-        'ibm_nairobi': (300, 6, 2),
-        'ibm_oslo': (280, 5, 3),
+        'aer_simulator': (10, 1, 100),
+        'aer_simulator_statevector': (12, 2, 100),
+        'ibmq_qasm_simulator': (60, 3, 100),
+        'ibm_nairobi': (3, 6, 100),
+        'ibm_oslo': (5, 5, 100),
     }
 
     qpus = []
@@ -41,22 +34,20 @@ def create_qpus():
         qpu = QPU(qpu_type, i)
         if qpu_type in qpu_override_params:
             exec_time, queue_time, capacity = qpu_override_params[qpu_type]
-            qpu.update_metrics(exec_time, queue_time, capacity) #comment this if you don t want to override the metrics
+            qpu.update_metrics(exec_time, queue_time, capacity)
         qpus.append(qpu)
 
     return qpus
 
-
-
-
 def main():
-    # choose a circuit example
-    qc = examples.simple_circuit.simple_circuit()
-    # qc = examples.rca.ripple_carry_adder(5)
-    # qc = examples.grover.grover_circuit(2)
-    print(qc.draw())
 
-    # convert to DAG and extract data
+    from generator import generate_circuits
+
+    circuit = generate_circuits("./src/single.json")[0]
+    qc = QuantumCircuit.from_qasm_str(circuit)
+    # qc.draw('mpl')
+    # plt.show()
+
     dag = circuit_to_dag(qc)
     id_mapping = get_dag_mapping(dag)
     vertex_weights, edges = extract_graph_data(dag, id_mapping)
@@ -64,11 +55,10 @@ def main():
     print(vertex_weights)
     pprint(id_mapping)
 
-    # create QPUs and model
+    # create QPUs
     qpus = create_qpus()
 
-    # print local index and node information for each DAG operation node
-    print("\nNode information (using local indexes):")
+    """ print("\nNode information (using local indexes):")
     for node in dag.op_nodes():
         local_index = id_mapping[node._node_id]
         print(f"Local index: {local_index}")
@@ -78,70 +68,62 @@ def main():
             print(f"  Parameters: {node.op.params}")
         print(f"  Qubits: {node.qargs}")
         print(f"  Condition: {node.condition}")
-        print("-" * 40)
+        print("-" * 40) """
 
-    vertex_weights, edges = extract_graph_data(dag, id_mapping)
-
-    #change the data according to the requirements
+    # solve the model using CutAndShootModel
     model = CutAndShootModel(
         edges=edges,
         vertex_weights=vertex_weights,
         qpus=qpus,
-        num_shots_per_subcircuit=100,
+        num_shots_per_subcircuit=10000,
         num_subcircuits=4,
         alpha=0.8,
         beta=0.2
     )
-
     model.solve_model()
     subcircuits, num_cuts = model.print_and_return_solution()
 
-    # create all subcircuit variants
+    qc.draw('mpl')
+    plt.show()
+
+    # generate all variants of the subcircuits
     quantum_subcircuits = create_quantum_subcircuits(subcircuits, qc, id_mapping=id_mapping)
 
-    # group subcircuits per QPU
-    qpu_assignments = {qpu.index: [] for qpu in qpus}
+    # create mapping from node ID to DAGOpNode
+    dag_nodes_dict = {
+        local_index: node for node in dag.op_nodes()
+        if (local_index := id_mapping.get(node._node_id)) is not None
+    }
 
+    # connection map between subcircuits for final reconstruction
+    subcircuit_map = build_subcircuit_map(subcircuits, dag_nodes_dict)
+    pprint(subcircuit_map)
+
+    # asign subcircuit variants to QPUs
+    qpu_assignments = {qpu.index: [] for qpu in qpus}
     for subcircuit_id, variants in quantum_subcircuits.items():
         for qpu_index, shots in subcircuits[subcircuit_id]['shots'].items():
             if shots > 0:
-                for name, (circuit, active_qubits) in variants.items():
-                    qpu_assignments[qpu_index].append((name, circuit, shots, active_qubits))
+                for name, (circuit, active_qubits, init_qbits, measure_qbits) in variants.items():
+                    qpu_assignments[qpu_index].append((name, circuit, shots, active_qubits, init_qbits, measure_qbits))
 
-
-    pprint(qpu_assignments)
-    
-    # create mapping from qpu index to qpu object
+    # run each QPU's circuits and collect results
     qpu_mapping = {qpu.index: qpu for qpu in qpus}
     result_list = []
-
-    # run each QPU's assigned circuits
     for qpu_index, circuit_data in qpu_assignments.items():
-        if not circuit_data or len(circuit_data) == 0:
+        if not circuit_data:
             continue
-
-        qpu = qpu_mapping.get(qpu_index)
-        print(f"\n========== Executing circuits for QPU {qpu_index} ({qpu}) ==========\n")
-
         results = run_circuit_list(circuit_data, backend=qpu_mapping[qpu_index].backend)
-        pprint(results)
         result_list.append(results)
 
-    # print(f"\n============================== Merged results ==============================\n")
     variants_results = merge_and_normalize_variant_counts(result_list)
     pprint(variants_results)
 
-    print("Num cuts: ", num_cuts)
-    coefficent = 1/pow(16, num_cuts) # 16 becuase we have 4 possible initial states and 4 possible measurement states
-    print("Coefficent: ", coefficent)
+    print("Num cuts:", num_cuts)
+    coefficent = 1 / pow(16, num_cuts)  # 4 init states * 4 measurement states = 16
+    print("Coefficient:", coefficent)
 
-    pprint(fd_reconstruct_variant_dict(variants_results, coefficent))
-    pprint(dd_reconstruct_variant_dict(variants_results, coefficent))
-
-
-
-
-    
+    # final distrribution is missing
 
 if __name__ == "__main__":
     main()

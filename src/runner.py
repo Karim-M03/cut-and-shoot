@@ -4,6 +4,8 @@ from qiskit.providers import Backend
 from typing import List, Tuple
 from copy import deepcopy
 import logging
+from qiskit.visualization import plot_histogram
+import matplotlib.pyplot as plt
 
 # suppress Qiskit logs
 """ for handler in logging.root.handlers[:]:
@@ -15,30 +17,29 @@ logging.getLogger('qiskit').setLevel(logging.CRITICAL)
 
 
 def run_circuit_list(
-    circuit_list: List[Tuple[str, QuantumCircuit, int, List[int]]],
+    circuit_list: List[Tuple[str, QuantumCircuit, int, List[int], List[int], List[int]]],
     backend: Backend
 ) -> dict[str, dict[str, dict]]:
     """
-    executes a list of quantum circuits with associated active qubits.
+    executes a list of quantum circuits with associated metadata.
 
-    :param circuit_list: list of (circuit_name, QuantumCircuit, shots, active_qubits)
-    :param backend: Backend instance
-    :return: dict {circuit_name: {'counts': {...}, 'active_qubits': [...]}, ...}
+    :param circuit_list: list of tuples (circuit_name, QuantumCircuit, shots, active_qubits, init_qbits, meas_qbits)
+    :param backend: Qiskit backend
+    :return: dict mapping circuit name to execution results and metadata
     """
     results = {}
 
-    # group circuits by shot count
     grouped = defaultdict(list)
     active_qubits_map = {}
+    init_qbits_map = {}
+    meas_qbits_map = {}
 
-    for name, qc, shots, active_qubits in circuit_list:
+    for name, qc, shots, active_qubits, init_qbits, meas_qbits in circuit_list:
         if qc.num_qubits == 0:
             continue
 
-        # deepcopy to isolate circuits
         qc_copy = deepcopy(qc)
 
-        # add default measurement if needed
         if qc_copy.count_ops().get("measure", 0) == 0:
             creg = ClassicalRegister(qc_copy.num_qubits, f"auto_meas_{name}")
             qc_copy.add_register(creg)
@@ -47,8 +48,9 @@ def run_circuit_list(
 
         grouped[shots].append((name, qc_copy))
         active_qubits_map[name] = active_qubits
+        init_qbits_map[name] = init_qbits
+        meas_qbits_map[name] = meas_qbits
 
-    # execute circuits by group
     for shots, group in grouped.items():
         names, qcs = zip(*group)
         transpiled = transpile(list(qcs), backend)
@@ -57,10 +59,16 @@ def run_circuit_list(
 
         for i, name in enumerate(names):
             counts = result.get_counts(i)
-            print(f"Executed: {name} → {counts}")
+            total_shots = sum(counts.values())
+            probabilities = {k: v / total_shots for k, v in counts.items()}
+
             results[name] = {
                 'counts': dict(counts),
-                'active_qubits': active_qubits_map.get(name, [])
+                'probabilities': probabilities,
+                'active_qubits': active_qubits_map.get(name, []),
+                'initialized_qubits': init_qbits_map.get(name, []),
+                'measured_qubits': meas_qbits_map.get(name, []),
+                'total_shots': total_shots
             }
 
     return results

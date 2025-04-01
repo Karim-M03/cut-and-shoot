@@ -27,10 +27,11 @@ class QPU:
             if qpu_type in [b.name for b in provider.backends()]:
                 return provider.get_backend(qpu_type)
         except Exception as e:
-            print(f"[Warning] Failed to load backend '{qpu_type}': {e}")
+            #print(f"[Warning] Failed to load backend '{qpu_type}': {e}")
+            None
 
         # fallback
-        print(f"[Fallback] Using default AerSimulator for '{qpu_type}'")
+        #print(f"[Fallback] Using default AerSimulator for '{qpu_type}'")
         return AerSimulator()
 
     def _set_backend_metrics(self):

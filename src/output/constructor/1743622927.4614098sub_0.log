@@ -1,0 +1,18 @@
+2025-04-02 21:42:07 - Sub 0 Logger - INFO - Generating subcircuit 0 with 16 in-combos and 1 out-combos
+2025-04-02 21:42:07 - Sub 0 Logger - INFO - Created variant sub_0_in_q6-|0>_q4-|0>_out_
+2025-04-02 21:42:07 - Sub 0 Logger - INFO - Created variant sub_0_in_q6-|1>_q4-|0>_out_
+2025-04-02 21:42:07 - Sub 0 Logger - INFO - Created variant sub_0_in_q6-|+>_q4-|0>_out_
+2025-04-02 21:42:07 - Sub 0 Logger - INFO - Created variant sub_0_in_q6-|i>_q4-|0>_out_
+2025-04-02 21:42:07 - Sub 0 Logger - INFO - Created variant sub_0_in_q6-|0>_q4-|1>_out_
+2025-04-02 21:42:07 - Sub 0 Logger - INFO - Created variant sub_0_in_q6-|1>_q4-|1>_out_
+2025-04-02 21:42:07 - Sub 0 Logger - INFO - Created variant sub_0_in_q6-|+>_q4-|1>_out_
+2025-04-02 21:42:07 - Sub 0 Logger - INFO - Created variant sub_0_in_q6-|i>_q4-|1>_out_
+2025-04-02 21:42:07 - Sub 0 Logger - INFO - Created variant sub_0_in_q6-|0>_q4-|+>_out_
+2025-04-02 21:42:07 - Sub 0 Logger - INFO - Created variant sub_0_in_q6-|1>_q4-|+>_out_
+2025-04-02 21:42:07 - Sub 0 Logger - INFO - Created variant sub_0_in_q6-|+>_q4-|+>_out_
+2025-04-02 21:42:07 - Sub 0 Logger - INFO - Created variant sub_0_in_q6-|i>_q4-|+>_out_
+2025-04-02 21:42:07 - Sub 0 Logger - INFO - Created variant sub_0_in_q6-|0>_q4-|i>_out_
+2025-04-02 21:42:07 - Sub 0 Logger - INFO - Created variant sub_0_in_q6-|1>_q4-|i>_out_
+2025-04-02 21:42:07 - Sub 0 Logger - INFO - Created variant sub_0_in_q6-|+>_q4-|i>_out_
+2025-04-02 21:42:07 - Sub 0 Logger - INFO - Created variant sub_0_in_q6-|i>_q4-|i>_out_
+2025-04-02 21:42:07 - Sub 0 Logger - INFO - Subcircuit 0: generated 16 variants.

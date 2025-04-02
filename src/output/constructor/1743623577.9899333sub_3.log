@@ -1,0 +1,18 @@
+2025-04-02 21:52:57 - Sub 3 Logger - INFO - Generating subcircuit 3 with 1 in-combos and 16 out-combos
+2025-04-02 21:52:58 - Sub 3 Logger - INFO - Created variant sub_3_in__out_q2-I_q3-I
+2025-04-02 21:52:58 - Sub 3 Logger - INFO - Created variant sub_3_in__out_q2-I_q3-X
+2025-04-02 21:52:58 - Sub 3 Logger - INFO - Created variant sub_3_in__out_q2-I_q3-Z
+2025-04-02 21:52:58 - Sub 3 Logger - INFO - Created variant sub_3_in__out_q2-I_q3-Y
+2025-04-02 21:52:58 - Sub 3 Logger - INFO - Created variant sub_3_in__out_q2-X_q3-I
+2025-04-02 21:52:58 - Sub 3 Logger - INFO - Created variant sub_3_in__out_q2-X_q3-X
+2025-04-02 21:52:58 - Sub 3 Logger - INFO - Created variant sub_3_in__out_q2-X_q3-Z
+2025-04-02 21:52:58 - Sub 3 Logger - INFO - Created variant sub_3_in__out_q2-X_q3-Y
+2025-04-02 21:52:58 - Sub 3 Logger - INFO - Created variant sub_3_in__out_q2-Z_q3-I
+2025-04-02 21:52:58 - Sub 3 Logger - INFO - Created variant sub_3_in__out_q2-Z_q3-X
+2025-04-02 21:52:58 - Sub 3 Logger - INFO - Created variant sub_3_in__out_q2-Z_q3-Z
+2025-04-02 21:52:58 - Sub 3 Logger - INFO - Created variant sub_3_in__out_q2-Z_q3-Y
+2025-04-02 21:52:58 - Sub 3 Logger - INFO - Created variant sub_3_in__out_q2-Y_q3-I
+2025-04-02 21:52:58 - Sub 3 Logger - INFO - Created variant sub_3_in__out_q2-Y_q3-X
+2025-04-02 21:52:58 - Sub 3 Logger - INFO - Created variant sub_3_in__out_q2-Y_q3-Z
+2025-04-02 21:52:58 - Sub 3 Logger - INFO - Created variant sub_3_in__out_q2-Y_q3-Y
+2025-04-02 21:52:58 - Sub 3 Logger - INFO - Subcircuit 3: generated 16 variants.

@@ -1,4 +1,7 @@
+import logging
 import pulp
+
+from logger import get_logger
 
 class CutAndShootModel:
     def __init__(
@@ -354,10 +357,16 @@ class CutAndShootModel:
         prints the solution status and objective value, then returns a structured
         dictionary containing only the subcircuits that include at least one vertex
         """
+
+        import pprint
+        pp = pprint.PrettyPrinter(indent=2)
+
+
+        logger = get_logger("Model Logger", "./src/output/main.log", logging.INFO)
         status = pulp.LpStatus[self.problem.status]
         obj_value = pulp.value(self.problem.objective) if self.problem.objective is not None else None
-        print(f"Status: {status}")
-        print(f"Objective value: {obj_value:.4f}\n")
+        logger.info(f"Status: {status}")
+        logger.info(f"Objective value: {obj_value:.4f}\n")
 
         if status == "Infeasible":
             raise Exception("Status Infeasible")
@@ -365,9 +374,9 @@ class CutAndShootModel:
         # result dictionary (only subcircuits with at least one vertex)
         subcircuits_data = {}
 
-        print("Number of cuts:", pulp.value(self.K))
+        logger.info("Number of cuts: %.2f", pulp.value(self.K))
 
-        print("Subcircuits (assigned vertices):")
+        logger.info("Subcircuits (assigned vertices):")
         for c in self.subcircuits:
             # get vertices assigned to subcircuit c
             subcircuit_vertices = [v for v in self.vertices if pulp.value(self.y[v, c]) == 1]
@@ -375,7 +384,7 @@ class CutAndShootModel:
             if not subcircuit_vertices:
                 continue
 
-            print(f"  Subcircuit {c}: {subcircuit_vertices}")
+            logger.info(f"  Subcircuit {c}: {pp.pformat(subcircuit_vertices)}")
 
             subcircuits_data[c] = {
                 "vertices": subcircuit_vertices,
@@ -393,18 +402,21 @@ class CutAndShootModel:
                 if val > 0:
                     assignment[self.qpus[q].index] = int(val)
 
-            print(f"Subcircuit {c} -> Assigned shots: {assignment}")
+            logger.info(f"Subcircuit {c} -> Assigned shots: {pp.pformat(assignment)}")
             subcircuits_data[c]["shots"] = assignment
 
-        print("\n-- QPU Usage --")
+        logger.info("\n-- QPU Usage --")
         for q in self.qpus_index:
             t_q_val = pulp.value(self.T_q[q])
             if t_q_val > 0:
                 total_shots = sum(pulp.value(self.shots_assign[(c, q)]) for c in self.subcircuits)
-                print(f"QPU {self.qpus[q].index}: T_q = {t_q_val:.2f}, total shots = {total_shots}")
+                logger.info(f"QPU {self.qpus[q].index}: T_q = {t_q_val:.2f}, total shots = {total_shots}")
 
         T_val = pulp.value(self.T)
-        print(f"\nMakespan T = {T_val:.2f}")
+        logger.info(f"\nMakespan T = {T_val:.2f}")
+
+        # counter for indexing cuts
+        cut_counter = 0
 
         # add subcircuit details
         for c in self.subcircuits:
@@ -418,17 +430,35 @@ class CutAndShootModel:
             subcircuits_data[c]['contributing_qubits'] = pulp.value(self.f[c])
 
             subcircuits_data[c].update({"cuts": {"out": [], "in": []}})
+            subcircuits_data[c].update({"cuts_info": {"out": [], "in": []}})
+            subcircuits_data[c].update({"role": []})
+
+
             for e in self.edges:
                 if pulp.value(self.x[(e, c)]) > 0:
+
+                    cut_info = {
+                        "cut_id": cut_counter,
+                        "edge": e # (source_vertex, target_vertex)
+                    }
                     # if the edge is cut and the source belongs to subcircuit c, it's an out cut
                     if pulp.value(self.y[e[0], c]) == 1:
                         subcircuits_data[c]["cuts"]["out"].append(e[0])
+                        subcircuits_data[c]["cuts_info"]["out"].append(cut_info)
+                        subcircuits_data[c]["role"].append("downstream")
+
+
                     # otherwise if the target belongs to subcircuit c, it's an in cut
                     else:
                         subcircuits_data[c]["cuts"]["in"].append(e[1])
+                        subcircuits_data[c]["cuts_info"]["in"].append(cut_info)
+                        subcircuits_data[c]["role"].append("upstream")
 
-        print("\nCuts per subcircuit:")
+                        
+
+
+        logger.info("\nCuts per subcircuit:")
         for c, data in subcircuits_data.items():
-            print(f"Subcircuit {c} - In: {data['cuts']['in']}, Out: {data['cuts']['out']}")
+            logger.info(f"Subcircuit {c} - In: {data['cuts']['in']}, Out: {data['cuts']['out']}")
 
         return subcircuits_data, pulp.value(self.K)

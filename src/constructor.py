@@ -2,6 +2,7 @@ import itertools
 import logging
 from collections import defaultdict, deque
 from pprint import pprint
+from queue import Queue
 from typing import Dict, List, Tuple, Deque, Any
 
 import numpy as np
@@ -9,22 +10,23 @@ from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit.converters import circuit_to_dag
 from qiskit.dagcircuit.dagnode import DAGOpNode
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
-
+from subcircuit import Variant
+from logger import get_logger
+import time
 
 
 # possible initial states
 init_states: Dict[str, List[complex]] = {
-    '0': [1, 0],
-    '1': [0, 1],
-    '+': [1 / np.sqrt(2), 1 / np.sqrt(2)],
-    'i': [1 / np.sqrt(2), 1j / np.sqrt(2)]
+    '|0>': [1, 0],
+    '|1>': [0, 1],
+    '|+>': [1 / np.sqrt(2), 1 / np.sqrt(2)],
+    '|i>': [1 / np.sqrt(2), 1j / np.sqrt(2)]
 }
 
 def calculate_required_qubits(
     vertices: set,
-    dag_nodes: List[DAGOpNode],
-    id_mapping: Dict[int, int]
+    dag_nodes: List[DAGOpNode], # type: ignore
+    id_mapping: Dict[int, int],
 ) -> Tuple[int, Dict[Any, int]]:
     """
     determines the set of physical qubits used in a subset of DAG nodes and
@@ -54,33 +56,32 @@ def apply_initializations(
     sub_qc: QuantumCircuit,
     qreg: QuantumRegister,
     qubit_indices: List[int],
-    init_variant: str
-) -> None:
+    init_variant: str,
+)  -> Dict[int, str]:
     """
-    applies a specific initial state to selected qubits in the subcircuit.
+    applies a specific initial state to selected qubits in the subcircuit
+    and returns the list of (qubit_index, basis) for naming purposes.
 
-    :param sub_qc: the subcircuit being constructed
-    :param qreg: quantum register used in the subcircuit
-    :param qubit_indices: list of qubit indices to initialize
-    :param init_variant: initialization type
+    :return: list of initialized qubits with their basis
     """
-    # get state vector for the selected initialization
     state = init_states[init_variant]
-
-    # apply it to each local qubit index
+    initialized = {}
     for idx in qubit_indices:
         sub_qc.initialize(state, qreg[idx])
+        initialized[idx] = init_variant
+
+    return initialized
+
 
 def append_gates(
     sub_qc: QuantumCircuit,
-    dag_nodes: List[DAGOpNode],
+    dag_nodes: List[DAGOpNode], # type: ignore
     vertices: set,
     qreg: QuantumRegister,
-    cuts_in: set,
-    init_variants_queue: Dict[int, Deque[str]],
+    init_map: Dict[Any, str],
     id_mapping: Dict[int, int],
-    qbit_mapping: Dict[Any, int]
-) -> None:
+    qbit_mapping: Dict[Any, int],
+)  -> Dict[int, str]:
     """
     adds all relevant gates to the subcircuit and handles qubit initialization
     at cut points
@@ -89,40 +90,42 @@ def append_gates(
     :param dag_nodes: full list of DAGOpNodes
     :param vertices: vertex ids belonging to the current subcircuit
     :param qreg: quantum register for the subcircuit
-    :param cuts_in: ids of input-cut vertices
-    :param init_variants_queue: queue of initialization variants for cut_ins
+    :param init_map: maps qbit -> initialization
     :param id_mapping: mapping from original dag node ids to local node ids
     :param qbit_mapping: mapping from global qubits to local indices
     """
- 
+
+    initialized = {}
+    already_initted = set()  # track which qubits have been initialized
+
     for node in dag_nodes:
         mapped_id_node = id_mapping[node._node_id]
         # skip if it's not part of this subcircuit or it's a measurement node
         if mapped_id_node not in vertices or node.op.name.lower() == 'measure':
             continue
 
-        # map global qubits to local indices
-        local_indices = [qbit_mapping[qb] for qb in node.qargs]
+        # if a qubit needs initialization and hasn t been initialized yet do so once.
+        for qb in node.qargs:
+            if qb in init_map and qb not in already_initted:
+                idx = qbit_mapping[qb]
+                init_dict = apply_initializations(sub_qc, qreg, [idx], init_map[qb])
+                initialized.update(init_dict)
+                already_initted.add(qb)
 
-        # handle input cut initialization
-        if mapped_id_node in cuts_in and init_variants_queue[mapped_id_node]:
-            variant = init_variants_queue[mapped_id_node].popleft()
-            apply_initializations(sub_qc, qreg, local_indices, variant)
-        else:
-            # no duplicate qubitsi
-            if len(set(local_indices)) < len(local_indices):
-                print('Error: node has duplicate qubits:', node.op.name, node.qargs)
-            sub_qc.append(node.op, [qreg[idx] for idx in local_indices])
+
+        # after possibly initializing any required qubits, append the gate only once
+        sub_qc.append(node.op, [qreg[qbit_mapping[q]] for q in node.qargs])
+
+    return initialized
 
 def append_measurements(
     sub_qc: QuantumCircuit,
     qreg: QuantumRegister,
     creg: ClassicalRegister,
-    dag_nodes_dict: Dict[int, DAGOpNode],
-    cuts_out: List[int],
+    unique_qbs: List[Any],
     out_combo: Tuple[str, ...],
-    qbit_mapping: Dict[Any, int]
-) -> None:
+    qbit_mapping: Dict[Any, int],
+) -> Dict[int, str]:
     """
     adds measurement operations to the subcircuit according to the provided
     measurement basis for each cut out point.
@@ -135,47 +138,31 @@ def append_measurements(
     :param out_combo: tuple indicating the basis for each cut
     :param qbit_mapping: mapping from global qubits to local indices
     """
+    measured = {}
     cbit_index = 0
-    measured_qubits = set()
 
-     # loop through each output node and apply the measurement
-    for out_node_id, measure_variant in zip(cuts_out, out_combo):
-        out_dag_node = dag_nodes_dict.get(out_node_id)
-        if not out_dag_node:
-            continue
+    for qb, basis in zip(unique_qbs, out_combo):
+        local_idx = qbit_mapping[qb]
 
-        # sort qubits for consistency
-        sorted_qbs = sorted(out_dag_node.qargs, key=lambda q: (q._register.name, q._index))
-        for qb in sorted_qbs:
-            local_qb_idx = qbit_mapping[qb]
+        if basis == 'X':
+            sub_qc.h(qreg[local_idx])
+        elif basis == 'Y':
+            sub_qc.sdg(qreg[local_idx])
+            sub_qc.h(qreg[local_idx])
+        # Z/I: no transformation
 
-            #skip if already measured
-            if local_qb_idx in measured_qubits:
-                continue
+        sub_qc.measure(qreg[local_idx], creg[cbit_index])
+        measured[local_idx] = basis
+        cbit_index += 1
 
-            # apply the correct basiss transformation
-            if measure_variant == 'id':
-                # no rotation
-                pass
-            elif measure_variant == 'x':
-                sub_qc.h(qreg[local_qb_idx])
-            elif measure_variant == 'y':
-                sub_qc.sdg(qreg[local_qb_idx])
-                sub_qc.h(qreg[local_qb_idx])
-            elif measure_variant == 'z':
-                pass
-            
-            # perform the measurement
-            sub_qc.measure(qreg[local_qb_idx], creg[cbit_index])
-            cbit_index += 1
-            measured_qubits.add(local_qb_idx)
+    return measured
 
 def create_quantum_subcircuits(
     subcircuits: Dict[int, Dict[str, object]],
     qc: QuantumCircuit,
     id_mapping: Dict[int, int],
     max_workers: int = 8
-) -> Dict[int, Dict[str, Tuple[QuantumCircuit, List[int], List[int], List[int]]]]:
+) ->  Dict[int, Dict[str, Variant]]:
     """
     generates all variants of the quantum subcircuits defined in subcircuits,
     accounting for all combinations of input initializations and output measurements
@@ -188,15 +175,19 @@ def create_quantum_subcircuits(
                                 "in": [...],
                                 "out": [...]
                               }
+                              "cuts_info:{
+                                "in": [...],
+                                "out": [...],
+                              }
                             }
                           }
     :param qc: the original  quantum circuit needed to know which node do waht
     :param id_mapping: mapping from original dag node ids to local node ids
     :param max_workers: max number of threads
-    :return dictionary {sub_id: {variant_name: QuantumCircuit, ...}, ...}
+    :return dictionary {sub_id: {variant_name: Variant, ...}}
     """
     
-    result: Dict[int, Dict[str, Tuple[QuantumCircuit, List[int], List[int], List[int]]]] = defaultdict(dict)
+    result: Dict[int, Dict[str, Variant]] = defaultdict(dict)
 
     # convert full circuit to dag for node access
     dag = circuit_to_dag(qc)
@@ -206,16 +197,31 @@ def create_quantum_subcircuits(
 
     # function to generate all circuit variants for a single subcircuit
     def generate_subcircuits(sub_id: int, subcircuit: Dict[str, object]):
+
+        logger = get_logger(f"Sub {sub_id} Logger", f"./src/output/constructor/{time.time()}sub_{sub_id}.log" )
         local_subcircuits = {}
 
         # extract subcircuit info
         vertices = set(subcircuit['vertices'])
-        cuts_in = [n for n in subcircuit['cuts']['in'] if dag_nodes_dict[n].op.name.lower() != 'barrier']
-        cuts_out = [n for n in subcircuit['cuts']['out'] if dag_nodes_dict[n].op.name.lower() != 'barrier']
+        cuts_in = sorted([n for n in subcircuit['cuts']['in'] if dag_nodes_dict[n].op.name.lower() != 'barrier'])
+        cuts_out = sorted([n for n in subcircuit['cuts']['out'] if dag_nodes_dict[n].op.name.lower() != 'barrier'])
 
-        # prepare all combinations of inputs and measurement bases
-        all_in_combos = list(itertools.product(['0', '1', '+', 'i'], repeat=len(cuts_in)))
-        all_out_combos = list(itertools.product(['id', 'x', 'z', 'y'], repeat=len(cuts_out)))
+        unique_cut_in_qubits = sorted({
+            qb for node_id in cuts_in
+            for qb in dag_nodes_dict[node_id].qargs
+        }, key=lambda q: (q._register.name, q._index))
+
+        all_in_combos = list(itertools.product(['|0>', '|1>', '|+>', '|i>'], repeat=len(unique_cut_in_qubits)))
+
+        # get all the qbits involved in cut_out nodes
+        unique_qbs = sorted({
+            qb for node_id in cuts_out
+            for qb in dag_nodes_dict[node_id].qargs
+        }, key=lambda q: (q._register.name, q._index))
+
+        all_out_combos = list(itertools.product(['I', 'X', 'Z', 'Y'], repeat=len(unique_qbs)))
+        logger.info(f"Generating subcircuit {sub_id} with {len(all_in_combos)} in-combos and {len(all_out_combos)} out-combos")
+
 
         # loop through each input combo
         for in_combo in all_in_combos:
@@ -224,59 +230,72 @@ def create_quantum_subcircuits(
             base_sub_qc = QuantumCircuit(qreg)
 
             # initialize cut_in states
-            init_variants_queue = {
-                node_id: deque([variant])
-                for node_id, variant in zip(cuts_in, in_combo)
+            init_map = {
+                qb: basis for qb, basis in zip(unique_cut_in_qubits, in_combo)
             }
 
-            append_gates(
+            initialized_info = append_gates(
                 base_sub_qc,
                 dag_nodes,
                 vertices,
                 qreg,
-                set(cuts_in),
-                init_variants_queue,
+                init_map,
                 id_mapping,
-                qbit_map
+                qbit_map,
             )
 
-            initialized_qubits = sorted({qbit_map[qb] for cut in cuts_in for qb in dag_nodes_dict[cut].qargs})
-
+            # for naming
+            initialized_qbs_str = "_".join([f"q{q}-{b}" for q, b in initialized_info.items()])
             
             for out_combo in all_out_combos:
                 sub_qc_variant = base_sub_qc.copy()
-
-                unique_qbs = {
-                    qb
-                    for out_node_id in cuts_out
-                    for qb in dag_nodes_dict[out_node_id].qargs
-                }
+                
+                unique_qbs = sorted({
+                    qb for node_id in cuts_out
+                    for qb in dag_nodes_dict[node_id].qargs
+                }, key=lambda q: (q._register.name, q._index))
+                
                 creg = ClassicalRegister(len(unique_qbs), f"meas_{sub_id}")
                 sub_qc_variant.add_register(creg)
 
-                append_measurements(
+                measured_info = append_measurements(
                     sub_qc_variant,
                     qreg,
                     creg,
-                    dag_nodes_dict,
-                    cuts_out,
+                    unique_qbs,
                     out_combo,
-                    qbit_map
+                    qbit_map,
                 )
 
-                measured_qubits = sorted({qbit_map[qb] for qb in unique_qbs})
+                # measured_qubits = sorted({qbit_map[qb] for qb in unique_qbs})
                 active_qubits = sorted(qbit_map.values())
 
-                # name and store the variant
-                circuit_name = f"sub_{sub_id}_in_{'-'.join(in_combo)}_out_{'-'.join(out_combo)}"
-                local_subcircuits[circuit_name] = (
-                    sub_qc_variant,
-                    active_qubits,
-                    initialized_qubits,
-                    measured_qubits
-                )
+                local_to_global_qbit_map = {
+                    local_idx: dag.qubits.index(qb)
+                    for qb, local_idx in qbit_map.items()
+                }
 
-        print(f'Subcircuit {sub_id}: generated {len(local_subcircuits)} variants.')
+                measured_qbs_str = "_".join([f"q{q}-{b}" for q, b in measured_info.items()])
+
+
+                # name and store the variant
+                circuit_name = f"sub_{sub_id}_in_{initialized_qbs_str}_out_{measured_qbs_str}"
+
+                local_subcircuits[circuit_name] = Variant(
+                    sub_id=sub_id, 
+                    shots=subcircuit["shots"],
+                    name=circuit_name,
+                    vertices=vertices,
+                    cuts_info=subcircuit["cuts_info"],
+                    circuit=sub_qc_variant,
+                    active_qubits=active_qubits,
+                    initialized_info=initialized_info,
+                    measured_info=measured_info,
+                    qbit_map=local_to_global_qbit_map
+                )
+                logger.info(f"Created variant {circuit_name}")
+
+        logger.info(f"Subcircuit {sub_id}: generated {len(local_subcircuits)} variants.")
         return sub_id, local_subcircuits
     
     # generate all subcircuits in parallel
@@ -287,63 +306,5 @@ def create_quantum_subcircuits(
             sub_id, local_subcircuits = future.result()
             result[sub_id] = local_subcircuits
 
-    pprint(result)
+
     return result
-
-
-
-def build_subcircuit_map(
-    subcircuits: Dict[int, Dict[str, Any]],
-    dag_nodes_dict: Dict[int, DAGOpNode]
-) -> Dict[Tuple[int, int], List[List[str]]]:
-    """
-    builds a compact mapping of subcircuits that are connected through shared qubits
-    Returns a linear dictionary of the form:
-        {(sub_from, sub_to): [[shared_qb_out, shared_qb_in], ...]}
-    
-    Each key represents a directional connection from one subcircuit to another,
-    and the value is a list of shared qubit names involved in the cut.
-    """
-
-    # extract output cut qubits for each subcircuit, ignoring barrier nodes
-    out_cuts_info = {}
-    for sub_id, data in subcircuits.items():
-        out_nodes = [n for n in data['cuts']['out'] if dag_nodes_dict[n].op.name.lower() != 'barrier']
-        out_qubits = []
-        for node_id in out_nodes:
-            qubits = sorted(dag_nodes_dict[node_id].qargs, key=lambda q: (q._register.name, q._index))
-            out_qubits.append(qubits)
-        out_cuts_info[sub_id] = out_qubits
-
-    # extract input cut qubits for each subcircuit, ignoring barrier nodes
-    in_cuts_info = {}
-    for sub_id, data in subcircuits.items():
-        in_nodes = [n for n in data['cuts']['in'] if dag_nodes_dict[n].op.name.lower() != 'barrier']
-        in_qubits = []
-        for node_id in in_nodes:
-            qubits = sorted(dag_nodes_dict[node_id].qargs, key=lambda q: (q._register.name, q._index))
-            in_qubits.append(qubits)
-        in_cuts_info[sub_id] = in_qubits
-
-    # build the compact connection map between subcircuits
-    compact_map: Dict[Tuple[int, int], List[List[str]]] = {}
-
-    for sub_id_out, out_qubit_lists in out_cuts_info.items():
-        for sub_id_in, in_qubit_lists in in_cuts_info.items():
-            if sub_id_out == sub_id_in:
-                continue  # skip self connections
-
-            # compare each out qubit list with each in qubit list
-            for out_qubits in out_qubit_lists:
-                for in_qubits in in_qubit_lists:
-                    # find shared qubits between output and input cuts
-                    shared = sorted(set(out_qubits) & set(in_qubits), key=lambda q: (q._register.name, q._index))
-                    if shared:
-                        key = (sub_id_out, sub_id_in)
-                        if key not in compact_map:
-                            compact_map[key] = []
-
-                        shared_str = [f"{q._register.name}[{q._index}]" for q in shared]
-                        compact_map[key].append(shared_str)
-
-    return compact_map

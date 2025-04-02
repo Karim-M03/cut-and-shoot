@@ -96,31 +96,17 @@ def main():
     )
     model.solve_model()
     subcircuits, num_cuts = model.print_and_return_solution()
-
+    
     # generate all variants of the subcircuits
     quantum_subcircuits = create_quantum_subcircuits(subcircuits, qc, id_mapping=id_mapping)
-
+    
     for sub_id, sub_variants_dict in quantum_subcircuits.items():
-        logger.debug("========= Subcircuit %d (%d variants) =========", sub_id, len(sub_variants_dict))
-        
+        logger.debug(f"================ Subcircuit {sub_id} ================\n")
         for variant_name, variant in sub_variants_dict.items():
-            logger.debug("→ Variant name: %s", variant_name)
-
-            # Log basic info (repr)
-            try:
-                logger.debug("Variant repr:\n%s", repr(variant))
-            except Exception as e:
-                logger.warning("Could not log repr for variant %s: %s", variant_name, e)
-
-            # Log circuit diagram (draw)
-            try:
-                circuit_text = variant.circuit.draw(output="text").single_string()
-                logger.debug("Circuit diagram:\n%s", circuit_text)
-            except Exception as e:
-                logger.warning("Could not draw circuit for variant %s: %s", variant_name, e)
-
-            logger.debug("-" * 60)
-
+            logger.debug(f"\n{variant_name}\n")
+            logger.debug(f"\n{variant.__repr__()}\n")
+            logger.debug(variant.circuit.draw(output="text").single_string())
+            logger.debug("\n\n")
 
     # asign subcircuit variants to QPUs
     qpu_assignments = {qpu.index: [] for qpu in qpus}

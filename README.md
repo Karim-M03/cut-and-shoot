@@ -65,7 +65,6 @@ This code builds on from the following papers:
 ├── main.py                # main entry point for running pipeline
 ├── merge.py               # merges measurement results
 ├── model.py               # MILP model for subcircuit & shot assignment
-├── post_processing.py     # reconstructs global distribution
 ├── qpu.py                 # models QPU properties
 ├── runner.py              # dispatches circuits to QPUs
 └── load_credentials.py    # loads IBM Quantum account credential
@@ -167,8 +166,9 @@ This will:
 - **`runner.py`**  
   Handles QPU execution of subcircuits in parallel
 
-- **`merge.py` & `post_processing.py`**  
-  Combines results and reconstructs the global output distribution
+- **`merge.py` **  
+  Combines results
+- missing final reconstruction
 
 ---
 

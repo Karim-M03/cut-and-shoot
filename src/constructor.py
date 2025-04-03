@@ -121,7 +121,6 @@ def append_gates(
 def append_measurements(
     sub_qc: QuantumCircuit,
     qreg: QuantumRegister,
-    creg: ClassicalRegister,
     unique_qbs: List[Any],
     out_combo: Tuple[str, ...],
     qbit_mapping: Dict[Any, int],
@@ -132,7 +131,6 @@ def append_measurements(
 
     :param sub_qc: the subcircuit being constructed
     :param qreg: quantum register for the subcircuit
-    :param creg: classical register for measurements
     :param dag_nodes_dict: mapping from node ID to DAGOpNode
     :param cuts_out: list of output cut node IDs
     :param out_combo: tuple indicating the basis for each cut
@@ -151,7 +149,6 @@ def append_measurements(
             sub_qc.h(qreg[local_idx])
         # Z/I: no transformation
 
-        sub_qc.measure(qreg[local_idx], creg[cbit_index])
         measured[local_idx] = basis
         cbit_index += 1
 
@@ -255,13 +252,10 @@ def create_quantum_subcircuits(
                     for qb in dag_nodes_dict[node_id].qargs
                 }, key=lambda q: (q._register.name, q._index))
                 
-                creg = ClassicalRegister(len(unique_qbs), f"meas_{sub_id}")
-                sub_qc_variant.add_register(creg)
 
                 measured_info = append_measurements(
                     sub_qc_variant,
                     qreg,
-                    creg,
                     unique_qbs,
                     out_combo,
                     qbit_map,
